@@ -12,7 +12,8 @@ def get_dets(img, model):
     return model(img)
 
 
-def auto_annotate(img_dir, label_dir, img_ext, classes, model=MODEL):
+def auto_annotate(img_dir, label_dir, img_ext, classes, save_img, label_writer, 
+    model=MODEL):
     for img_name in os.listdir(img_dir):
         if img_name[-3:] not in img_ext:
             continue
@@ -24,13 +25,14 @@ def auto_annotate(img_dir, label_dir, img_ext, classes, model=MODEL):
         c = len(img.getbands())
         result = get_dets(img, model)
         dets = [x.numpy() for x in result.xywh[0]]
-        writer = PascalVOCWriter(xml_path, dets, img_path, classes, w, h)
+        writer = label_writer(xml_path, dets, img_path, classes, w, h)
         writer.save()
-        result.save(label_dir)
+        if save_img:
+            result.save(label_dir)
 
 
 def annotate_single_img(args):
-    img_name, img_ext, img_dir, label_dir, model, classes = args
+    img_name, img_ext, img_dir, label_dir, model, classes, save_img, label_writer = args
     if img_name[-3:] not in img_ext:
         return
     print("Processing %s..." % img_name)
@@ -41,17 +43,19 @@ def annotate_single_img(args):
     c = len(img.getbands())
     result = get_dets(img, model)
     dets = [x.numpy() for x in result.xywh[0]]
-    writer = PascalVOCWriter(xml_path, dets, img_path, classes, w, h)
+    writer = label_writer(xml_path, dets, img_path, classes, w, h)
     writer.save()
-    result.save(label_dir)
+    if save_img:
+        result.save(label_dir)
 
 
-def auto_annotate_multi_thread(img_dir, label_dir, img_ext, classes, model=MODEL, thread=2):
+def auto_annotate_multi_thread(img_dir, label_dir, img_ext, classes, 
+    save_img, label_writer, model=MODEL, thread=2):
     if thread < 2:
         print("Pls use more than 1 thread!")
         return
     with ThreadPool(thread) as pool:
-        for _ in pool.map(annotate_single_img, [(img_name, img_ext, img_dir, label_dir, model, classes)
+        for _ in pool.map(annotate_single_img, [(img_name, img_ext, img_dir, label_dir, model, classes, save_img, label_writer)
                                                 for img_name in os.listdir(img_dir)]):
             pass
 
@@ -62,18 +66,27 @@ if __name__ == "__main__":
     IMG_EXT = ["jpg"]
     LABEL_DIR = r"/"
     CLASSES = ["person"]
+    SAVE_IMAGE = False
+    SAVE_TYPE = 'voc'
     MULTI_THREAD = True
     NUM_THREAD = 4
-    if len(sys.argv) >= 5:
+    if len(sys.argv) >= 7:
         IMG_DIR = sys.argv[1].strip()
         IMG_EXT = [ext for ext in sys.argv[2].split(",")]
         LABEL_DIR = sys.argv[3]
         CLASSES = [class_name for class_name in sys.argv[4].split(",")]
-        if len(sys.argv) == 7:
-            MULTI_THREAD = bool(sys.argv[5])
-            NUM_THREAD = int(sys.argv[6])
+        SAVE_IMAGE = bool(sys.argv[5])
+        SAVE_TYPE = sys.argv[6]
+        if len(sys.argv) == 9:
+            MULTI_THREAD = bool(sys.argv[7])
+            NUM_THREAD = int(sys.argv[8])
+
+    if SAVE_TYPE == 'voc':
+        label_writer = PascalVOCWriter
 
     if MULTI_THREAD:
-        auto_annotate_multi_thread(IMG_DIR, LABEL_DIR, IMG_EXT, CLASSES, thread=NUM_THREAD)
+        auto_annotate_multi_thread(IMG_DIR, LABEL_DIR, IMG_EXT, CLASSES, 
+            SAVE_IMAGE, label_writer, thread=NUM_THREAD)
     else:
-        auto_annotate(IMG_DIR, LABEL_DIR, IMG_EXT, CLASSES)
+        auto_annotate(IMG_DIR, LABEL_DIR, IMG_EXT, CLASSES, SAVE_IMAGE, 
+            label_writer)

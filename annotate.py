@@ -5,7 +5,11 @@ from PIL import Image
 from voc_writer import PascalVOCWriter
 from multiprocessing.pool import ThreadPool
 
+# yolov5x is the default model to be used
 MODEL = torch.hub.load('ultralytics/yolov5', 'yolov5x', pretrained=True)
+
+# counts labeled images
+file_counter = 0
 
 
 def get_dets(img, model):
@@ -14,7 +18,10 @@ def get_dets(img, model):
 
 def auto_annotate(img_dir, label_dir, img_ext, classes, save_img, label_writer, 
     model=MODEL):
-    for img_name in os.listdir(img_dir):
+    file_counter = 0
+    list_img = os.listdir(img_dir)
+    total_file = len(list_img)
+    for img_name in list_img:
         if img_name[-3:] not in img_ext:
             continue
         print("Processing %s..." % img_name)
@@ -29,6 +36,8 @@ def auto_annotate(img_dir, label_dir, img_ext, classes, save_img, label_writer,
         writer.save()
         if save_img:
             result.save(label_dir)
+        file_counter += 1
+        print("Done %d/%d" % (file_counter, total_file))
 
 
 def annotate_single_img(args):
@@ -47,6 +56,8 @@ def annotate_single_img(args):
     writer.save()
     if save_img:
         result.save(label_dir)
+    file_counter += 1
+    print("Done %d/%d" % (file_counter, total_file))
 
 
 def auto_annotate_multi_thread(img_dir, label_dir, img_ext, classes, 
@@ -54,22 +65,25 @@ def auto_annotate_multi_thread(img_dir, label_dir, img_ext, classes,
     if thread < 2:
         print("Pls use more than 1 thread!")
         return
+    file_counter = 0
+    list_img = os.listdir(img_dir)
+    total_file = len(list_img)
     with ThreadPool(thread) as pool:
         for _ in pool.map(annotate_single_img, [(img_name, img_ext, img_dir, label_dir, model, classes, save_img, label_writer)
-                                                for img_name in os.listdir(img_dir)]):
+                                                for img_name in list_img]):
             pass
 
 
 if __name__ == "__main__":
-    print(sys.argv)
-    IMG_DIR = r"/"
-    IMG_EXT = ["jpg"]
-    LABEL_DIR = r"/"
-    CLASSES = ["person"]
-    SAVE_IMAGE = False
-    SAVE_TYPE = 'voc'
-    MULTI_THREAD = True
-    NUM_THREAD = 4
+    print("sys.argv:", sys.argv)
+    IMG_DIR = r"/" # data directory
+    IMG_EXT = ["jpg"] # acceptable image extensions
+    LABEL_DIR = r"/" # path to save labels
+    CLASSES = ["person"] # classes to be labeled
+    SAVE_IMAGE = False # save image or not? (saving takes a lot of time)
+    SAVE_TYPE = 'voc' # label type
+    MULTI_THREAD = True # use multi thread or not?
+    NUM_THREAD = 4 # number of threads
     if len(sys.argv) >= 7:
         IMG_DIR = sys.argv[1].strip()
         IMG_EXT = [ext for ext in sys.argv[2].split(",")]
@@ -81,6 +95,7 @@ if __name__ == "__main__":
             MULTI_THREAD = bool(sys.argv[7])
             NUM_THREAD = int(sys.argv[8])
 
+    # only supports PascalVOC for now
     if SAVE_TYPE == 'voc':
         label_writer = PascalVOCWriter
 

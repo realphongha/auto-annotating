@@ -1,10 +1,15 @@
 import torch
 import os
+import sys
 from PIL import Image
 from voc_writer import PascalVOCWriter
 from multiprocessing.pool import ThreadPool
 
 MODEL = torch.hub.load('ultralytics/yolov5', 'yolov5x', pretrained=True)
+
+
+def get_dets(img, model):
+    return model(img)
 
 
 def auto_annotate(img_dir, label_dir, img_ext, classes, model=MODEL):
@@ -17,7 +22,7 @@ def auto_annotate(img_dir, label_dir, img_ext, classes, model=MODEL):
         img = Image.open(img_path)
         h, w = img.height, img.width
         c = len(img.getbands())
-        result = model(img)
+        result = get_dets(img, model)
         dets = [x.numpy() for x in result.xywh[0]]
         writer = PascalVOCWriter(xml_path, dets, img_path, classes, w, h)
         writer.save()
@@ -34,7 +39,7 @@ def annotate_single_img(args):
     img = Image.open(img_path)
     h, w = img.height, img.width
     c = len(img.getbands())
-    result = model(img)
+    result = get_dets(img, model)
     dets = [x.numpy() for x in result.xywh[0]]
     writer = PascalVOCWriter(xml_path, dets, img_path, classes, w, h)
     writer.save()
@@ -52,10 +57,23 @@ def auto_annotate_multi_thread(img_dir, label_dir, img_ext, classes, model=MODEL
 
 
 if __name__ == "__main__":
-    IMG_DIR = r"E:\Workspace\data\prj15\phong\data"
+    print(sys.argv)
+    IMG_DIR = r"/"
     IMG_EXT = ["jpg"]
-    LABEL_DIR = r"E:\Workspace\data\prj15\label\box_camera_2_2021_02_04_13_29_34"
+    LABEL_DIR = r"/"
     CLASSES = ["person"]
+    MULTI_THREAD = True
+    NUM_THREAD = 4
+    if len(sys.argv) >= 5:
+        IMG_DIR = sys.argv[1].strip()
+        IMG_EXT = [ext for ext in sys.argv[2].split(",")]
+        LABEL_DIR = sys.argv[3]
+        CLASSES = [class_name for class_name in sys.argv[4].split(",")]
+        if len(sys.argv) == 7:
+            MULTI_THREAD = bool(sys.argv[5])
+            NUM_THREAD = int(sys.argv[6])
 
-    # auto_annotate(IMG_DIR, LABEL_DIR, IMG_EXT, CLASSES)
-    auto_annotate_multi_thread(IMG_DIR, LABEL_DIR, IMG_EXT, CLASSES, thread=2)
+    if MULTI_THREAD:
+        auto_annotate_multi_thread(IMG_DIR, LABEL_DIR, IMG_EXT, CLASSES, thread=NUM_THREAD)
+    else:
+        auto_annotate(IMG_DIR, LABEL_DIR, IMG_EXT, CLASSES)

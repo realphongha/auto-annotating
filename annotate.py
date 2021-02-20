@@ -91,10 +91,10 @@ if __name__ == "__main__":
         IMG_EXT = [ext for ext in sys.argv[2].split(",")]
         LABEL_DIR = sys.argv[3]
         CLASSES = [class_name for class_name in sys.argv[4].split(",")]
-        SAVE_IMAGE = bool(sys.argv[5])
+        SAVE_IMAGE = (True if sys.argv[5] == "True" else False)
         SAVE_TYPE = sys.argv[6]
         if len(sys.argv) == 9:
-            MULTI_THREAD = bool(sys.argv[7])
+            MULTI_THREAD = (True if sys.argv[7] == "True" else False)
             NUM_THREAD = int(sys.argv[8])
 
     print("Config:", IMG_DIR, LABEL_DIR, IMG_EXT, CLASSES, 

@@ -18,6 +18,7 @@ def get_dets(img, model):
 
 def auto_annotate(img_dir, label_dir, img_ext, classes, save_img, label_writer, 
     model=MODEL):
+    global file_counter
     file_counter = 0
     list_img = os.listdir(img_dir)
     total_file = len(list_img)
@@ -41,7 +42,8 @@ def auto_annotate(img_dir, label_dir, img_ext, classes, save_img, label_writer,
 
 
 def annotate_single_img(args):
-    img_name, img_ext, img_dir, label_dir, model, classes, save_img, label_writer = args
+    global file_counter
+    img_name, img_ext, img_dir, label_dir, model, classes, save_img, label_writer, total_file = args
     if img_name[-3:] not in img_ext:
         return
     print("Processing %s..." % img_name)
@@ -65,24 +67,24 @@ def auto_annotate_multi_thread(img_dir, label_dir, img_ext, classes,
     if thread < 2:
         print("Pls use more than 1 thread!")
         return
+    global file_counter
     file_counter = 0
     list_img = os.listdir(img_dir)
     total_file = len(list_img)
     with ThreadPool(thread) as pool:
-        for _ in pool.map(annotate_single_img, [(img_name, img_ext, img_dir, label_dir, model, classes, save_img, label_writer)
+        for _ in pool.map(annotate_single_img, [(img_name, img_ext, img_dir, label_dir, model, classes, save_img, label_writer, total_file)
                                                 for img_name in list_img]):
             pass
 
 
 if __name__ == "__main__":
-    print("sys.argv:", sys.argv)
     IMG_DIR = r"/" # data directory
     IMG_EXT = ["jpg"] # acceptable image extensions
     LABEL_DIR = r"/" # path to save labels
     CLASSES = ["person"] # classes to be labeled
     SAVE_IMAGE = False # save image or not? (saving takes a lot of time)
     SAVE_TYPE = 'voc' # label type
-    MULTI_THREAD = True # use multi thread or not?
+    MULTI_THREAD = False # use multi thread or not?
     NUM_THREAD = 4 # number of threads
     if len(sys.argv) >= 7:
         IMG_DIR = sys.argv[1].strip()
@@ -94,6 +96,9 @@ if __name__ == "__main__":
         if len(sys.argv) == 9:
             MULTI_THREAD = bool(sys.argv[7])
             NUM_THREAD = int(sys.argv[8])
+
+    print("Config:", IMG_DIR, LABEL_DIR, IMG_EXT, CLASSES, 
+            SAVE_IMAGE, SAVE_TYPE, MULTI_THREAD, NUM_THREAD)
 
     # only supports PascalVOC for now
     if SAVE_TYPE == 'voc':

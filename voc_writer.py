@@ -17,12 +17,15 @@ classes = ['person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train',
 class PascalVOCWriter(LabelWriter):
     def __init__(self, file_path, dets, img_path, chosen_classes, width, height):
         super().__init__(file_path, dets)
+        self.havePerson = False
         self.writer = Writer(img_path, width, height)
         for det in dets:
             class_name = classes[round(det[5])]
             if class_name in chosen_classes:
                 self.writer.addObject(class_name, round(det[0]-det[2]/2),
                                       round(det[1]-det[3]/2), round(det[0]+det[2]/2), round(det[1]+det[3]/2))
+                self.havePerson = True
 
     def save(self):
-        self.writer.save(self.file_path)
+        if self.havePerson:
+            self.writer.save(self.file_path)

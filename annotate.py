@@ -20,7 +20,7 @@ def auto_annotate(img_dir, label_dir, img_ext, classes, save_img, label_writer,
     model=MODEL):
     global file_counter
     file_counter = 0
-    list_img = os.listdir(img_dir)
+    list_img = sorted(os.listdir(img_dir))
     total_file = len(list_img)
     for img_name in list_img:
         if img_name[-3:] not in img_ext:
@@ -69,7 +69,7 @@ def auto_annotate_multi_thread(img_dir, label_dir, img_ext, classes,
         return
     global file_counter
     file_counter = 0
-    list_img = os.listdir(img_dir)
+    list_img = sorted(os.listdir(img_dir))
     total_file = len(list_img)
     with ThreadPool(thread) as pool:
         for _ in pool.map(annotate_single_img, [(img_name, img_ext, img_dir, label_dir, model, classes, save_img, label_writer, total_file)

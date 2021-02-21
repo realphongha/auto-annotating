@@ -22,17 +22,20 @@ def auto_annotate(img_dir, label_dir, img_ext, classes, save_img, label_writer,
     file_counter = 0
     list_img = sorted(os.listdir(img_dir))
     total_file = len(list_img)
-    for img_name in list_img:
+    img_paths = [os.path.join(img_dir, name) for name in list_img]
+    batch_dets = get_dets(img_paths, model)
+    for i in range(len(list_img)):
+        img_name = list_img[i]
         if img_name[-3:] not in img_ext:
             continue
         print("Processing %s..." % img_name)
-        img_path = os.path.join(img_dir, img_name)
+        img_path = img_paths[i]
         xml_path = os.path.join(label_dir, img_name[:-3] + "xml")
         img = Image.open(img_path)
         h, w = img.height, img.width
         c = len(img.getbands())
-        result = get_dets(img, model)
-        dets = [x.numpy() for x in result.xywh[0]]
+        result = batch_dets[i]
+        dets = [x.numpy() for x in result.xywh]
         writer = label_writer(xml_path, dets, img_path, classes, w, h)
         writer.save()
         if save_img:
@@ -43,17 +46,18 @@ def auto_annotate(img_dir, label_dir, img_ext, classes, save_img, label_writer,
 
 def annotate_single_img(args):
     global file_counter
-    img_name, img_ext, img_dir, label_dir, model, classes, save_img, label_writer, total_file = args
+    i, list_img, img_ext, img_dir, label_dir, model, classes, save_img, label_writer, total_file, img_paths, batch_dets = args
+    img_name = list_img[i]
     if img_name[-3:] not in img_ext:
         return
     print("Processing %s..." % img_name)
-    img_path = os.path.join(img_dir, img_name)
+    img_path = img_paths[i]
     xml_path = os.path.join(label_dir, img_name[:-3] + "xml")
     img = Image.open(img_path)
     h, w = img.height, img.width
     c = len(img.getbands())
-    result = get_dets(img, model)
-    dets = [x.numpy() for x in result.xywh[0]]
+    result = batch_dets[i]
+    dets = [x.numpy() for x in result.xywh]
     writer = label_writer(xml_path, dets, img_path, classes, w, h)
     writer.save()
     if save_img:
@@ -71,9 +75,11 @@ def auto_annotate_multi_thread(img_dir, label_dir, img_ext, classes,
     file_counter = 0
     list_img = sorted(os.listdir(img_dir))
     total_file = len(list_img)
+    img_paths = [os.path.join(img_dir, name) for name in list_img]
+    batch_dets = get_dets(img_paths, model)
     with ThreadPool(thread) as pool:
-        for _ in pool.map(annotate_single_img, [(img_name, img_ext, img_dir, label_dir, model, classes, save_img, label_writer, total_file)
-                                                for img_name in list_img]):
+        for _ in pool.map(annotate_single_img, [(i, list_img, img_ext, img_dir, label_dir, model, classes, save_img, label_writer, total_file, img_paths, batch_dets)
+                                                for i in range(len(list_img))]):
             pass
 
 

@@ -5,25 +5,39 @@ from PIL import Image
 from voc_writer import PascalVOCWriter
 from multiprocessing.pool import ThreadPool
 
+# device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.cuda.current_device()
+
 # yolov5x is the default model to be used
-MODEL = torch.hub.load('ultralytics/yolov5', 'yolov5x', pretrained=True)
+MODEL = torch.hub.load('ultralytics/yolov5', 'yolov5x', pretrained=True).to(device)
+
 
 # counts labeled images
 file_counter = 0
 
 
-def get_dets(img, model):
-    return model(img)
+def get_dets(imgs, model, batch_size):
+    # batch predicting
+    dets_batch = list()
+    data_size = len(imgs)
+    for i in range(data_size//batch_size + 1):
+        if i < data_size//batch_size:
+            dets_batch.extend(model(imgs[i*batch_size:(i+1)*batch_size]))
+        else:
+            dets_batch.extend(model(imgs[i*batch_size:]))
+    return dets_batch
 
 
-def auto_annotate(img_dir, label_dir, img_ext, classes, save_img, label_writer, 
-    model=MODEL):
+def auto_annotate(img_dir, label_dir, img_ext, classes, save_img, batch_size, 
+    label_writer, model=MODEL):
     global file_counter
     file_counter = 0
     list_img = sorted(os.listdir(img_dir))
     total_file = len(list_img)
     img_paths = [os.path.join(img_dir, name) for name in list_img]
-    batch_dets = get_dets(img_paths, model)
+    imgs = [Image.open(path) for path in img_paths]
+    print("Reading batch images...")
+    batch_dets = get_dets(imgs, model, batch_size)
     for i in range(len(list_img)):
         img_name = list_img[i]
         if img_name[-3:] not in img_ext:
@@ -31,7 +45,7 @@ def auto_annotate(img_dir, label_dir, img_ext, classes, save_img, label_writer,
         print("Processing %s..." % img_name)
         img_path = img_paths[i]
         xml_path = os.path.join(label_dir, img_name[:-3] + "xml")
-        img = Image.open(img_path)
+        img = imgs[i]
         h, w = img.height, img.width
         c = len(img.getbands())
         result = batch_dets[i]
@@ -46,14 +60,14 @@ def auto_annotate(img_dir, label_dir, img_ext, classes, save_img, label_writer,
 
 def annotate_single_img(args):
     global file_counter
-    i, list_img, img_ext, img_dir, label_dir, model, classes, save_img, label_writer, total_file, img_paths, batch_dets = args
+    i, list_img, img_ext, img_dir, label_dir, model, classes, save_img, label_writer, total_file, img_paths, imgs, batch_dets = args
     img_name = list_img[i]
     if img_name[-3:] not in img_ext:
         return
     print("Processing %s..." % img_name)
     img_path = img_paths[i]
     xml_path = os.path.join(label_dir, img_name[:-3] + "xml")
-    img = Image.open(img_path)
+    img = imgs[i]
     h, w = img.height, img.width
     c = len(img.getbands())
     result = batch_dets[i]
@@ -67,7 +81,7 @@ def annotate_single_img(args):
 
 
 def auto_annotate_multi_thread(img_dir, label_dir, img_ext, classes, 
-    save_img, label_writer, model=MODEL, thread=2):
+    save_img, batch_size, label_writer, model=MODEL, thread=4):
     if thread < 2:
         print("Pls use more than 1 thread!")
         return
@@ -76,9 +90,11 @@ def auto_annotate_multi_thread(img_dir, label_dir, img_ext, classes,
     list_img = sorted(os.listdir(img_dir))
     total_file = len(list_img)
     img_paths = [os.path.join(img_dir, name) for name in list_img]
-    batch_dets = get_dets(img_paths, model)
+    imgs = [Image.open(path) for path in img_paths]
+    print("Reading batch images...")
+    batch_dets = get_dets(img_paths, model, batch_size)
     with ThreadPool(thread) as pool:
-        for _ in pool.map(annotate_single_img, [(i, list_img, img_ext, img_dir, label_dir, model, classes, save_img, label_writer, total_file, img_paths, batch_dets)
+        for _ in pool.map(annotate_single_img, [(i, list_img, img_ext, img_dir, label_dir, model, classes, save_img, label_writer, total_file, img_paths, imgs, batch_dets)
                                                 for i in range(len(list_img))]):
             pass
 
@@ -90,6 +106,7 @@ if __name__ == "__main__":
     CLASSES = ["person"] # classes to be labeled
     SAVE_IMAGE = False # save image or not? (saving takes a lot of time)
     SAVE_TYPE = 'voc' # label type
+    BATCH_SIZE = 100 # batch size for input images
     MULTI_THREAD = False # use multi thread or not?
     NUM_THREAD = 4 # number of threads
     if len(sys.argv) >= 7:
@@ -99,9 +116,10 @@ if __name__ == "__main__":
         CLASSES = [class_name for class_name in sys.argv[4].split(",")]
         SAVE_IMAGE = (True if sys.argv[5] == "True" else False)
         SAVE_TYPE = sys.argv[6]
+        BATCH_SIZE = int(sys.argv[7])
         if len(sys.argv) == 9:
-            MULTI_THREAD = (True if sys.argv[7] == "True" else False)
-            NUM_THREAD = int(sys.argv[8])
+            MULTI_THREAD = (True if sys.argv[8] == "True" else False)
+            NUM_THREAD = int(sys.argv[9])
 
     print("Config:", IMG_DIR, LABEL_DIR, IMG_EXT, CLASSES, 
             SAVE_IMAGE, SAVE_TYPE, MULTI_THREAD, NUM_THREAD)
@@ -112,7 +130,7 @@ if __name__ == "__main__":
 
     if MULTI_THREAD:
         auto_annotate_multi_thread(IMG_DIR, LABEL_DIR, IMG_EXT, CLASSES, 
-            SAVE_IMAGE, label_writer, thread=NUM_THREAD)
+            SAVE_IMAGE, BATCH_SIZE, label_writer, thread=NUM_THREAD)
     else:
         auto_annotate(IMG_DIR, LABEL_DIR, IMG_EXT, CLASSES, SAVE_IMAGE, 
-            label_writer)
+            BATCH_SIZE, label_writer)

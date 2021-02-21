@@ -18,14 +18,21 @@ file_counter = 0
 
 def get_dets(imgs, model, batch_size):
     # batch predicting
-    dets_batch = list()
+    dets = list()
     data_size = len(imgs)
     for i in range(data_size//batch_size + 1):
+        print("Reading %d/%d..." % (i*batch_size+1, data_size))
         if i < data_size//batch_size:
-            dets_batch.extend(model(imgs[i*batch_size:(i+1)*batch_size]))
+            result = model(imgs[i*batch_size:(i+1)*batch_size])
+            for img in imgs[i*batch_size:(i+1)*batch_size]:
+                img.close()
         else:
-            dets_batch.extend(model(imgs[i*batch_size:]))
-    return dets_batch
+            result = model(imgs[i*batch_size:])
+            for img in imgs[i*batch_size:]:
+                img.close()
+        result = [x.cpu().numpy() for x in result.xywh]
+        dets.extend(result)
+    return dets
 
 
 def auto_annotate(img_dir, label_dir, img_ext, classes, save_img, batch_size, 
@@ -48,8 +55,7 @@ def auto_annotate(img_dir, label_dir, img_ext, classes, save_img, batch_size,
         img = imgs[i]
         h, w = img.height, img.width
         c = len(img.getbands())
-        result = batch_dets[i]
-        dets = [x.numpy() for x in result.xywh]
+        dets = batch_dets[i]
         writer = label_writer(xml_path, dets, img_path, classes, w, h)
         writer.save()
         if save_img:
@@ -70,8 +76,7 @@ def annotate_single_img(args):
     img = imgs[i]
     h, w = img.height, img.width
     c = len(img.getbands())
-    result = batch_dets[i]
-    dets = [x.numpy() for x in result.xywh]
+    dets = batch_dets[i]
     writer = label_writer(xml_path, dets, img_path, classes, w, h)
     writer.save()
     if save_img:
